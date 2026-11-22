@@ -10,7 +10,7 @@ MCA_PATTERN = ".mca/"
 
 
 def git(repo: Path, *args: str) -> str | None:
-    """Run git in repo and return its stdout, or None if git could not run."""
+    """Run git in repo and return its stdout, or None if git could not run or failed."""
     try:
         completed = subprocess.run(
             ["git", *args],
@@ -20,6 +20,8 @@ def git(repo: Path, *args: str) -> str | None:
             timeout=GIT_TIMEOUT,
         )
     except (OSError, subprocess.SubprocessError):
+        return None
+    if completed.returncode != 0:
         return None
     return completed.stdout.decode("utf-8", errors="replace")
 

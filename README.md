@@ -40,7 +40,7 @@ Repeat step 2 and start a fresh conversation whenever the code has changed subst
 | `--ext txt` | Include an extra file extension (repeatable). |
 | `--no-downloads-copy` | Do not copy the pack to the Windows Downloads folder. |
 
-The pack includes tracked `.py` files, small config files (`pyproject.toml`, `requirements*.txt`, `setup.cfg`, `README*`, `.ini`, `.toml`, `.json`, `.yaml`, `.yml`) and files under 200 KB by default. `--ext` and `extra_extensions` accept `yaml` or `.yaml`. Binary files and files that usually hold credentials are always excluded: `.env*` (except `.env.example`/`.sample`/`.template`), `credentials.*`, `secrets.*`, `service-account*`, `*.pem`, `*.key`, `*.p12`, `.netrc`, `.pypirc`, SSH keys. A regex secret scan (quoted assignments such as `DB_PASSWORD = "..."`, unquoted values in config files, `sk-...`, GitHub, AWS, Slack, Google, Stripe tokens, URLs with passwords, private keys) refuses to build the pack unless `--mask` is given. The scan is a safety net, not a guarantee.
+The pack includes tracked and untracked (but not git-ignored) `.py` files, small config files (`pyproject.toml`, `requirements*.txt`, `setup.cfg`, `README*`, `.ini`, `.toml`, `.json`, `.yaml`, `.yml`) and files under 200 KB by default. `--ext` and `extra_extensions` accept `yaml` or `.yaml`. Binary files and files that usually hold credentials are always excluded: `.env*` (except `.env.example`/`.sample`/`.template`), `credentials.*`, `secrets.*`, `service-account*`, `*.pem`, `*.key`, `*.p12`, `.netrc`, `.pypirc`, SSH keys. A regex secret scan (quoted assignments such as `DB_PASSWORD = "..."`, unquoted values in config files, `sk-...`, GitHub, AWS, Slack, Google, Stripe tokens, URLs with passwords, private keys) refuses to build the pack unless `--mask` is given. The scan is a safety net, not a guarantee.
 
 A rough token estimate is printed after packing.
 
@@ -60,18 +60,20 @@ All keys are optional.
 
 ## 3. Round trip
 
-1. Ask the Gem for a change. It answers with a short plan and one or more edit blocks.
-2. Copy the whole answer to the clipboard.
+1. Ask the Gem for a change. It answers with a short plan in the chat and a downloadable `gem_response.txt` that holds the edit blocks.
+2. Download `gem_response.txt` (if the Gem could not produce a file, copy its whole answer to the clipboard instead).
 3. From the target repository run:
 
    ```bash
-   python3 /path/to/MiniCodeAssist/loop.py
+   python3 /path/to/MiniCodeAssist/loop.py --file /path/to/gem_response.txt
    ```
+
+   Without `--file`, `loop.py` reads the clipboard.
 
 4. The tool applies the edits, runs checks, prints the report and copies the report to the clipboard.
 5. Paste the report back into the Gem. Repeat until the task is done.
 
-If you cannot use the clipboard (for example in a plain SSH session), save the answer to a file:
+If you cannot use the clipboard (for example in a plain SSH session), save the answer to a file and pass it with `--file`:
 
 ```bash
 python3 /path/to/MiniCodeAssist/loop.py --file reponse.md

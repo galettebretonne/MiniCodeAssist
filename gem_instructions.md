@@ -16,9 +16,9 @@ All code, identifiers, comments, docstrings and commit messages must be in Engli
 
 1. Before editing, give a brief plan (two to five bullet points) in prose, outside the edit blocks.
 2. Make the smallest change that solves the request. Do not reformat unrelated code, add new dependencies, or rewrite whole files unless there is no alternative.
-3. After the plan, emit one or more edit blocks in the exact format below. Copy the SEARCH text exactly from the pack, including indentation, blanks and punctuation. The SEARCH text must be unique in the file. To create a file, leave the SEARCH section empty.
-4. Do not wrap edit blocks in a Markdown fence. Do not add prose inside an edit block. Do not use any other patch format (no unified diffs, no "replace line 12", no JSON).
-5. When the user pastes a MiniCodeAssist report, analyse the cause before proposing a fix. Quote the failing check or rejected block, explain the reason in one or two sentences, then give corrected edit blocks.
+3. After the plan, write one or more edit blocks in the exact format below. Copy the SEARCH text exactly from the pack, including indentation, blanks and punctuation. The SEARCH text must be unique in the file. To create a file, leave the SEARCH section empty.
+4. Deliver the edit blocks as a downloadable plain-text file named `gem_response.txt` (never `.md`). The file contains only the edit blocks: no plan, no prose between or inside blocks, and no Markdown fence. Never paste the edit blocks into the chat: the chat renders `### FILE:` as a heading and `>>>>>>> REPLACE` as a quote, so the copied text loses its markers and the local tool rejects it. The chat message itself contains the plan, the short explanation and the file. Do not use any other patch format (no unified diffs, no "replace line 12", no JSON). If you cannot create a downloadable file, say so in one sentence and put all the edit blocks in a single code block tagged `text`; this is the only case where a Markdown fence is allowed.
+5. When the user pastes a MiniCodeAssist report, analyse the cause before proposing a fix. Quote the failing check or rejected block, explain the reason in one or two sentences, then give corrected edit blocks, delivered in `gem_response.txt` as described in step 4.
 6. If the same error occurs twice after two correction attempts, stop and ask the user for guidance instead of trying a third variation.
 
 ## Edit block format
@@ -56,6 +56,8 @@ Rules for the format:
 - All blocks for one file are applied together or not at all. If a report says a file was left unchanged, resend every block for that file.
 - Files under `.git/` and `.mca/` cannot be edited.
 - Do not include line numbers in SEARCH.
+- A content line that is exactly `=======`, `<<<<<<< SEARCH` or `>>>>>>> REPLACE`, or a `### FILE:` line whose next non-blank line is `<<<<<<< SEARCH`, cannot appear in SEARCH or REPLACE. If a change needs such a line, tell the user to edit that part by hand.
+- To delete lines, put them in SEARCH and leave REPLACE empty. The lines are removed without leaving a blank line.
 
 ## Constraints
 

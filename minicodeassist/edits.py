@@ -73,6 +73,14 @@ def _strip_fences(lines: list[str], path: str) -> list[str]:
     return lines
 
 
+def _starts_block(lines: list[str], index: int) -> bool:
+    """True when the next non-blank line after lines[index] is a SEARCH marker."""
+    for following in lines[index + 1 :]:
+        if following.strip():
+            return following.strip() == SEARCH_MARK
+    return False
+
+
 def parse_response(text: str) -> list[EditBlock]:
     """Extract all edit blocks from an assistant response.
 
@@ -88,7 +96,10 @@ def parse_response(text: str) -> list[EditBlock]:
 
     for number, raw in enumerate(lines, start=1):
         stripped = raw.strip()
-        if stripped.startswith(FILE_PREFIX):
+        # Inside a block, a "### FILE:" line is content unless a SEARCH marker follows it.
+        if stripped.startswith(FILE_PREFIX) and (
+            state in ("outside", "header") or _starts_block(lines, number - 1)
+        ):
             if state not in ("outside", "header"):
                 raise ParseError(f"line {start_line}: unterminated SEARCH/REPLACE block")
             current_path = validate_path(stripped[len(FILE_PREFIX) :].strip().strip("`").strip())
@@ -117,6 +128,11 @@ def parse_response(text: str) -> list[EditBlock]:
             continue
 
         if state == "replace":
+            if stripped == SPLIT_MARK:
+                raise ParseError(
+                    f"line {number}: a second {SPLIT_MARK} inside one block is ambiguous; "
+                    f"content lines made only of {SPLIT_MARK} cannot be edited this way"
+                )
             if stripped == REPLACE_MARK:
                 assert current_path is not None
                 blocks.append(

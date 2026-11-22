@@ -32,7 +32,7 @@ def load_config(repo: Path) -> Config:
     if not ini.is_file():
         return config
 
-    parser = configparser.ConfigParser()
+    parser = configparser.ConfigParser(interpolation=None)
     try:
         parser.read(ini, encoding="utf-8")
     except (configparser.Error, UnicodeDecodeError) as error:

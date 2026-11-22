@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import secrets
 from dataclasses import dataclass, field
 from datetime import date
@@ -55,14 +56,14 @@ def _suffix(ext: str) -> str:
 
 
 def _collect(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> list[tuple[Path, str]]:
-    """Tracked text files that are small enough and not excluded, with their text."""
-    raw = git(repo, "ls-files", "-z") or ""
+    """Tracked or untracked (not git-ignored) text files that are small enough, with their text."""
+    raw = git(repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard") or ""
     if raw and "\0" in raw:
-        names = [name for name in raw.split("\0") if name]
+        names = list(dict.fromkeys(name for name in raw.split("\0") if name))
     elif raw.strip():
         names = raw.splitlines()
     else:
-        raise RuntimeError(f"No tracked files found in {repo}. Is this a git repository?")
+        raise RuntimeError(f"No files found in {repo}. Is this a git repository?")
 
     allowed = CODE_SUFFIXES | CONFIG_SUFFIXES | {
         _suffix(ext) for ext in (*config.extra_extensions, *extra) if ext.strip(" .")
@@ -96,8 +97,14 @@ def _collect(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> list[tu
 
 
 def collect_files(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> list[Path]:
-    """List tracked text files that are small enough and not excluded."""
+    """List tracked or untracked (not git-ignored) text files that are small enough."""
     return [path for path, _text in _collect(repo, config, extra)]
+
+
+def _fence(text: str) -> str:
+    """Return a backtick fence longer than any run of backticks inside text."""
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    return "`" * max(3, longest + 1)
 
 
 def _render_tree(paths: list[Path]) -> str:
@@ -234,10 +241,11 @@ def build_pack(
             sections.append(canary_lines[1])
             sections.append("")
         language = LANGUAGE.get(path.suffix.lower(), "text")
+        fence = _fence(text)
         sections.append(f"### FILE: {path.as_posix()}")
-        sections.append(f"```{language}")
+        sections.append(f"{fence}{language}")
         sections.append(text.rstrip("\n"))
-        sections.append("```")
+        sections.append(fence)
         sections.append("")
     if canary:
         sections.append(canary_lines[2])

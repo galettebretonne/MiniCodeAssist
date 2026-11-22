@@ -19,6 +19,8 @@ def _git_diff_stat(repo: Path) -> str:
     if output is None:
         return "(unavailable)"
     lines = output.strip().splitlines()
+    untracked = git(repo, "ls-files", "-z", "--others", "--exclude-standard", "--", ".") or ""
+    lines.extend(f"new (untracked): {name}" for name in untracked.split("\0") if name)
     if len(lines) > MAX_DIFF_LINES:
         lines = lines[:MAX_DIFF_LINES] + ["... (truncated)"]
     return "\n".join(lines) if lines else "(no tracked changes)"

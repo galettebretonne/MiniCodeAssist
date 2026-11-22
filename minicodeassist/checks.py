@@ -47,7 +47,10 @@ def _trim(output: str, repo: Path) -> str:
     if len(lines) > MAX_LINES:
         lines = lines[-MAX_LINES:]
     result = "\n".join(lines)
-    return result[:MAX_DETAIL] + ("..." if len(result) > MAX_DETAIL else "")
+    if len(result) > MAX_DETAIL:
+        # Keep the end: the summary line and the last traceback matter most.
+        return "..." + result[-MAX_DETAIL:]
+    return result
 
 
 def _run(args: list[str], repo: Path, timeout: int) -> tuple[bool, str]:
@@ -166,7 +169,7 @@ def run_checks(repo: Path, changed: list[str], config: Config) -> list[CheckResu
 
     if (repo / config.test_dir).is_dir():
         ok, detail = _run(
-            [sys.executable, "-m", "unittest", "discover", "-s", config.test_dir, "-v"],
+            [sys.executable, "-m", "unittest", "discover", "-s", config.test_dir],
             repo,
             TIMEOUT_TESTS,
         )

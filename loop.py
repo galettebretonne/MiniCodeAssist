@@ -34,7 +34,11 @@ LAST_APPLIED = "last_applied.sha256"
 
 def _read_response(path: Path | None) -> str:
     if path:
-        return Path(path).read_text(encoding="utf-8")
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as error:
+            print(f"Cannot read {path}: {error}", file=sys.stderr)
+            raise SystemExit(2) from error
     try:
         return read_clipboard()
     except (ClipboardUnavailable, subprocess.SubprocessError, OSError) as error:

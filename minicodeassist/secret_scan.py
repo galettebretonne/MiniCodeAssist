@@ -31,7 +31,17 @@ _KEY = (
 )
 
 _PATTERN_DEFS: tuple[tuple[str, str], ...] = (
-    ("private key", r"(?P<value>-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----)"),
+    (
+        "private key",
+        # The header, the key body and the END line are masked. The body is
+        # limited to base64 lines, PEM headers ("Proc-Type: ...") and blank
+        # lines, so a lone header in source code does not mask the rest of
+        # the file. Line breaks may be real or written as "\n" in a string.
+        r"(?P<value>-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----"
+        r"(?:(?:\r?\n|\\n)[ \t]*(?:[A-Za-z0-9+/=]{4,}|[A-Za-z-]+:[^\r\n\\]*)?[ \t]*"
+        r"(?=\r?\n|\\n|['\"]|$)){0,400}"
+        r"(?:(?:\r?\n|\\n)[ \t]*-----END (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----)?)",
+    ),
     ("AWS access key", r"\b(?P<value>(?:AKIA|ASIA)[0-9A-Z]{16})\b"),
     ("GitHub token", r"\b(?P<value>(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}))"),
     ("Slack token", r"\b(?P<value>xox[abposr]-[A-Za-z0-9-]{10,})\b"),

@@ -315,7 +315,11 @@ def _plan_file(
                 Rejection(path_text, block.line, "SEARCH text not found", _hints(text, block.search))
             )
             continue
-        text = text[: match.start] + match.replacement + text[match.end :]
+        end = match.end
+        if not match.replacement and not block.search.endswith("\n") and text[end : end + 1] == "\n":
+            # Deleting whole lines must not leave an empty line behind.
+            end += 1
+        text = text[: match.start] + match.replacement + text[end:]
         applied.append(f"{path_text} (line {_line_no(text, match.start)}, {match.tier} match)")
 
     if rejected:
