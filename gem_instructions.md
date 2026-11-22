@@ -51,6 +51,10 @@ Rules for the format:
 - Keep `<<<<<<< SEARCH`, `=======` and `>>>>>>> REPLACE` on their own lines, with no indentation.
 - Preserve the file's indentation exactly in SEARCH. Tabs are not the same as spaces.
 - One block may contain several consecutive lines. Use separate blocks for distant parts of a file.
+- Every block needs its own `### FILE:` header, even when several blocks edit the same file. A SEARCH marker without a header just before it is rejected.
+- SEARCH must cover whole lines: never start or end it in the middle of a line.
+- All blocks for one file are applied together or not at all. If a report says a file was left unchanged, resend every block for that file.
+- Files under `.git/` and `.mca/` cannot be edited.
 - Do not include line numbers in SEARCH.
 
 ## Constraints

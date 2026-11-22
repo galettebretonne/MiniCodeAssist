@@ -45,7 +45,8 @@ _PATTERN_DEFS: tuple[tuple[str, str], ...] = (
     ),
     (
         "credential in URL",
-        r"(?i)\b[a-z][a-z0-9+.-]*://[^\s:@/]+:(?P<value>[^\s@/]{4,})@",
+        # Bounded and anchored: an unbounded scheme rescans "a-a-a-..." quadratically.
+        r"(?i)(?<![a-z0-9+.-])[a-z][a-z0-9+.-]{0,31}://[^\s:@/]{1,256}:(?P<value>[^\s@/]{4,256})@",
     ),
 )
 

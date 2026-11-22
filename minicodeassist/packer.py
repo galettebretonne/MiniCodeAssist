@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import ast
 import secrets
-import subprocess
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
 from .config import Config
-from .secret_scan import SecretFinding, mask_text, scan_text
+from .gitutils import exclude_mca, git
+from .secret_scan import SecretFinding, is_sensitive_file, mask_text, scan_text
 
 CONFIG_SUFFIXES = {".toml", ".ini", ".cfg", ".json", ".yaml", ".yml"}
 CODE_SUFFIXES = {".py", ".pyi"}
@@ -49,23 +49,14 @@ class PackResult:
     masked: int = 0
 
 
-def _git(repo: Path, *args: str) -> str:
-    try:
-        completed = subprocess.run(
-            ["git", *args],
-            cwd=repo,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=20,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    return completed.stdout.decode("utf-8", errors="replace")
+def _suffix(ext: str) -> str:
+    """Normalise "yaml", ".yaml" or "YAML" to ".yaml"."""
+    return "." + ext.strip().lstrip(".").lower()
 
 
-def collect_files(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> list[Path]:
-    """List tracked text files that are small enough and not excluded."""
-    raw = _git(repo, "ls-files", "-z")
+def _collect(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> list[tuple[Path, str]]:
+    """Tracked text files that are small enough and not excluded, with their text."""
+    raw = git(repo, "ls-files", "-z") or ""
     if raw and "\0" in raw:
         names = [name for name in raw.split("\0") if name]
     elif raw.strip():
@@ -73,16 +64,15 @@ def collect_files(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> li
     else:
         raise RuntimeError(f"No tracked files found in {repo}. Is this a git repository?")
 
-    allowed = CODE_SUFFIXES | CONFIG_SUFFIXES | set(config.extra_extensions) | {
-        ext.lstrip(".") for ext in extra
+    allowed = CODE_SUFFIXES | CONFIG_SUFFIXES | {
+        _suffix(ext) for ext in (*config.extra_extensions, *extra) if ext.strip(" .")
     }
-    files: list[Path] = []
+    files: list[tuple[Path, str]] = []
     for name in names:
         path = Path(name)
-        parts = path.parts
-        if any(part == ".mca" for part in parts):
+        if any(part.lower() == ".mca" for part in path.parts):
             continue
-        if path.name == ".env" or path.name.startswith(".env."):
+        if is_sensitive_file(path.as_posix()):
             continue
         suffix = path.suffix.lower()
         if suffix in {".md", ".txt"} and suffix not in allowed:
@@ -98,11 +88,16 @@ def collect_files(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> li
         if b"\0" in data:
             continue
         try:
-            data.decode("utf-8")
+            text = data.decode("utf-8")
         except UnicodeDecodeError:
             continue
-        files.append(path)
-    return sorted(files, key=lambda item: str(item).lower())
+        files.append((path, text))
+    return sorted(files, key=lambda item: str(item[0]).lower())
+
+
+def collect_files(repo: Path, config: Config, extra: tuple[str, ...] = ()) -> list[Path]:
+    """List tracked text files that are small enough and not excluded."""
+    return [path for path, _text in _collect(repo, config, extra)]
 
 
 def _render_tree(paths: list[Path]) -> str:
@@ -172,9 +167,12 @@ def build_pack(
 ) -> PackResult:
     """Build and write .mca/repo_pack.md (or --out)."""
     repo = Path(repo)
-    files = collect_files(repo, config, extra_extensions)
-    commit = (_git(repo, "rev-parse", "--short", "HEAD") or "unknown").strip()
-    dirty = bool(_git(repo, "status", "--porcelain").strip())
+    # Before "git status", so that .mca/ never shows up as an untracked change.
+    exclude_mca(repo)
+    collected = _collect(repo, config, extra_extensions)
+    files = [path for path, _text in collected]
+    commit = (git(repo, "rev-parse", "--short", "HEAD") or "").strip() or "unknown"
+    dirty = bool((git(repo, "status", "--porcelain") or "").strip())
 
     header = [
         "# MiniCodeAssist repository pack",
@@ -198,19 +196,17 @@ def build_pack(
 
     contents: list[tuple[Path, str]] = []
     findings: dict[str, list[SecretFinding]] = {}
-    for path in files:
-        text = (repo / path).read_text(encoding="utf-8")
-        found = scan_text(text)
+    for path, text in collected:
+        found = scan_text(text, config=path.suffix.lower() not in CODE_SUFFIXES)
         if found:
-            findings[str(path)] = found
+            findings[path.as_posix()] = found
     if findings and not mask:
         raise SecretFound(findings)
 
     masked_count = 0
-    for path in files:
-        text = (repo / path).read_text(encoding="utf-8")
-        if mask and findings:
-            masked = mask_text(text)
+    for path, text in collected:
+        if mask and path.as_posix() in findings:
+            masked = mask_text(text, config=path.suffix.lower() not in CODE_SUFFIXES)
             if masked != text:
                 masked_count += 1
             text = masked
@@ -265,3 +261,16 @@ def build_pack(
         downloads_copy=copied,
         masked=masked_count,
     )
+
+
+def pack_summary(result: PackResult) -> str:
+    """Human-readable summary printed by pack_repo.py and loop.py --repack."""
+    lines = [f"Pack written: {result.output}"]
+    if result.downloads_copy:
+        lines.append(f"Downloads copy: {result.downloads_copy}")
+    lines.append(f"Files: {len(result.files)}")
+    if result.masked:
+        lines.append(f"Masked secrets in {result.masked} file(s)")
+    lines.append(f"Rough token estimate: {len(result.text) // 4:,}")
+    lines.append("Attach this file to the Gem at the start of a new conversation.")
+    return "\n".join(lines)

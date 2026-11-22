@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -71,7 +73,8 @@ def write_clipboard(text: str) -> bool:
 
     try:
         if is_wsl():
-            _run(["clip.exe"], data=text.encode("utf-16le"))
+            # The BOM tells clip.exe the input is UTF-16LE, so accents survive.
+            _run(["clip.exe"], data=("\ufeff" + text).encode("utf-16le"))
             return True
         if shutil.which("wl-copy"):
             _run(["wl-copy"], data=text.encode("utf-8"))
@@ -85,16 +88,12 @@ def write_clipboard(text: str) -> bool:
 
 
 def _temporary_path() -> Path:
-    import tempfile
-
     descriptor, name = tempfile.mkstemp(prefix="mca-clip-")
     os.close(descriptor)
     return Path(name)
 
 
 def _read_via_command(template: str) -> str:
-    import shlex
-
     handle = _temporary_path()
     command = shlex.split(template.replace("{path}", str(handle)))
     try:
@@ -105,8 +104,6 @@ def _read_via_command(template: str) -> str:
 
 
 def _write_via_command(template: str, text: str) -> bool:
-    import shlex
-
     handle = _temporary_path()
     try:
         handle.write_text(text, encoding="utf-8")

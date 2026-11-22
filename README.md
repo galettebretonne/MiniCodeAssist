@@ -40,7 +40,7 @@ Repeat step 2 and start a fresh conversation whenever the code has changed subst
 | `--ext txt` | Include an extra file extension (repeatable). |
 | `--no-downloads-copy` | Do not copy the pack to the Windows Downloads folder. |
 
-The pack includes tracked `.py` files, small config files (`pyproject.toml`, `requirements*.txt`, `setup.cfg`, `README*`, `.ini`, `.toml`, `.json`, `.yaml`, `.yml`) and files under 200 KB by default. `.env` and binary files are always excluded. A regex secret scan refuses to build the pack unless `--mask` is given.
+The pack includes tracked `.py` files, small config files (`pyproject.toml`, `requirements*.txt`, `setup.cfg`, `README*`, `.ini`, `.toml`, `.json`, `.yaml`, `.yml`) and files under 200 KB by default. `--ext` and `extra_extensions` accept `yaml` or `.yaml`. Binary files and files that usually hold credentials are always excluded: `.env*` (except `.env.example`/`.sample`/`.template`), `credentials.*`, `secrets.*`, `service-account*`, `*.pem`, `*.key`, `*.p12`, `.netrc`, `.pypirc`, SSH keys. A regex secret scan (quoted assignments such as `DB_PASSWORD = "..."`, unquoted values in config files, `sk-...`, GitHub, AWS, Slack, Google, Stripe tokens, URLs with passwords, private keys) refuses to build the pack unless `--mask` is given. The scan is a safety net, not a guarantee.
 
 A rough token estimate is printed after packing.
 
@@ -92,7 +92,9 @@ that replace them
 >>>>>>> REPLACE
 ```
 
-An empty SEARCH creates a new file. SEARCH must be copied exactly and must be unique in the file. Matching has three tiers: exact, ignoring trailing whitespace/CRLF, then ignoring common indentation. Line endings of the target file are preserved. Ambiguous or missing SEARCH text is rejected with the closest matching lines.
+An empty SEARCH creates a new file. SEARCH must be copied exactly, must cover whole lines and must be unique in the file. Every block needs its own `### FILE:` header, even for several blocks in the same file. Matching has three tiers: exact (whole lines only), ignoring trailing whitespace/CRLF, then ignoring common indentation. Line endings of the target file are preserved. Ambiguous or missing SEARCH text is rejected with the closest matching lines.
+
+Blocks are applied all-or-nothing per file: if one block for a file is rejected, that file is left unchanged and the other files are still applied. Backups are written before any file is modified. Non-UTF-8 files are rejected instead of crashing.
 
 ## Loop options
 
@@ -101,11 +103,16 @@ An empty SEARCH creates a new file. SEARCH must be copied exactly and must be un
 | `--repo PATH` | Target repository (default: current directory). |
 | `--file PATH` | Read the Gem response from a file instead of the clipboard. |
 | `--undo` | Restore the files touched by the last apply pass. |
-| `--run` | Run `python3 main.py` interactively first and include its output in the report. Can also be used on its own to capture a crash without applying edits. Use this only on purpose. |
+| `--run` | Run `python3 main.py` interactively and include its output in the report. On its own it does not read the clipboard and applies nothing (useful to capture a crash); combine with `--file` to apply edits first. Use this only on purpose. |
 | `--repack` | Rebuild the repository pack. |
 | `--no-checks` | Skip compilation, import and unittest checks. |
+| `--force` | Apply a response even if the same response was already applied. |
 
-Backups of touched files are stored in `.mca/backup/<timestamp>/`. `.mca/` is added to `.git/info/exclude` automatically, so none of this pollutes git status.
+A hash of the last applied response is kept in `.mca/last_applied.sha256`, so running `loop.py` twice on the same clipboard does not apply the edits twice. `--undo` clears it.
+
+Exit codes: `0` everything applied and all checks passed, `1` some blocks were rejected or a check failed, `2` the response or configuration could not be used.
+
+Backups of touched files are stored in `.mca/backup/<timestamp>/`. `.mca/` is added to `.git/info/exclude` automatically (by the packer and by the loop), so none of this pollutes git status.
 
 ## Checks and reports
 
@@ -123,7 +130,8 @@ Reports are bounded in size and tracebacks are trimmed to repository frames plus
 ## Safety notes
 
 - `main.py` is never executed automatically. Only `--run` starts it, and output is shown live on your terminal.
-- Paths escaping the repository, absolute paths and edits to `.mca/` are refused.
+- The checks do run code written by the Gem: changed modules are imported (unless top-level side effects are detected, including assignments that call functions) and `unittest discover` runs your tests. Use `--no-checks` and review `git diff` first if you do not trust an answer.
+- Paths escaping the repository, absolute paths and edits under `.git/` or `.mca/` are refused (case-insensitively, to cover Windows filesystems under WSL).
 - The pack is blocked when a likely secret is detected; use `--mask` deliberately if you need to proceed.
 - The Gem may make mistakes. Review `git diff` before committing.
 

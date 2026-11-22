@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 from .applier import ApplyResult
 from .checks import CheckResult
+from .gitutils import git
 from .secret_scan import redact_message
 
 MAX_DIFF_LINES = 30
@@ -15,15 +15,8 @@ MAX_REPORT_CHARS = 12000
 
 
 def _git_diff_stat(repo: Path) -> str:
-    try:
-        output = subprocess.run(
-            ["git", "diff", "--stat", "--", "."],
-            cwd=repo,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=20,
-        ).stdout.decode("utf-8", errors="replace")
-    except (OSError, subprocess.SubprocessError):
+    output = git(repo, "diff", "--stat", "--", ".")
+    if output is None:
         return "(unavailable)"
     lines = output.strip().splitlines()
     if len(lines) > MAX_DIFF_LINES:

@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 from minicodeassist.clipboard import find_downloads_dir
-from minicodeassist.config import Config, load_config
-from minicodeassist.packer import SecretFound, build_pack
+from minicodeassist.config import Config, ConfigError, load_config
+from minicodeassist.packer import SecretFound, build_pack, pack_summary
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,7 +23,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = args.repo.resolve()
-    config: Config = load_config(repo)
+    try:
+        config: Config = load_config(repo)
+    except ConfigError as error:
+        print(str(error), file=sys.stderr)
+        return 2
     downloads = None if args.no_downloads_copy else find_downloads_dir()
     try:
         result = build_pack(
@@ -40,15 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         print(str(error), file=sys.stderr)
         return 2
 
-    tokens = len(result.text) // 4
-    print(f"Pack written: {result.output}")
-    if result.downloads_copy:
-        print(f"Downloads copy: {result.downloads_copy}")
-    print(f"Files: {len(result.files)}")
-    if result.masked:
-        print(f"Masked secrets in {result.masked} file(s)")
-    print(f"Rough token estimate: {tokens:,}")
-    print("Attach this file to the Gem at the start of a new conversation.")
+    print(pack_summary(result))
     return 0
 
 

@@ -72,6 +72,40 @@ def _run(args: list[str], repo: Path, timeout: int) -> tuple[bool, str]:
     return completed.returncode == 0, _trim(completed.stdout.decode("utf-8", errors="replace"), repo)
 
 
+# Calls that are commonly used in module-level assignments and do no real work.
+_SAFE_CALLS = {
+    "getLogger", "namedtuple", "NamedTuple", "TypedDict", "TypeVar", "ParamSpec", "NewType",
+    "compile", "field", "dataclass", "frozenset", "set", "dict", "list", "tuple", "Path",
+    "PurePath", "PurePosixPath", "object", "Enum", "IntEnum", "auto", "partial", "Lock",
+    "defaultdict", "OrderedDict", "Counter", "deque", "timedelta", "Decimal", "Fraction",
+    "int", "float", "str", "bytes", "bool", "range", "len", "sorted", "getattr", "cast",
+}
+
+
+# ast.TryStar (try/except*) only exists from Python 3.11.
+_BLOCK_STATEMENTS = (
+    ast.For, ast.AsyncFor, ast.While, ast.Try, ast.With, ast.AsyncWith,
+) + ((ast.TryStar,) if hasattr(ast, "TryStar") else ())
+
+
+def _call_name(node: ast.Call) -> str:
+    func = node.func
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    if isinstance(func, ast.Name):
+        return func.id
+    return ""
+
+
+def _has_unsafe_call(node: ast.AST | None) -> bool:
+    if node is None:
+        return False
+    return any(
+        isinstance(child, ast.Call) and _call_name(child) not in _SAFE_CALLS
+        for child in ast.walk(node)
+    )
+
+
 def has_top_level_side_effects(source: str) -> bool:
     """Detect code that runs at import time, such as an unguarded main()."""
     try:
@@ -87,7 +121,9 @@ def has_top_level_side_effects(source: str) -> bool:
             test = ast.dump(node.test)
             if "__name__" not in test or "__main__" not in test:
                 return True
-        if isinstance(node, (ast.For, ast.While, ast.Try, ast.With)):
+        if isinstance(node, _BLOCK_STATEMENTS):
+            return True
+        if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)) and _has_unsafe_call(node.value):
             return True
     return False
 
