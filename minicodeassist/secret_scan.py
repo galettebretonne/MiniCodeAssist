@@ -21,8 +21,10 @@ class SecretFinding:
 
 # A credential-like key, also inside longer names such as DB_PASSWORD or
 # OPENAI_API_KEY. Lookarounds replace \b, which fails next to "_".
+# No repeated prefix group here: it would backtrack quadratically on long
+# identifiers such as "a_a_a_...".
 _KEY = (
-    r"(?<![A-Za-z0-9])(?:[A-Za-z0-9]+[_.-])*"
+    r"(?<![A-Za-z0-9])"
     r"(?:api[_-]?key|secret(?:[_-]?key)?|client[_-]?secret|access[_-]?key|"
     r"(?:access|auth|refresh|bearer|api)[_-]?token|token|password|passwd|pwd)"
     r"(?![A-Za-z0-9])"
@@ -51,7 +53,7 @@ _PATTERN_DEFS: tuple[tuple[str, str], ...] = (
 # because in Python "password = get_password()" is not a secret.
 _UNQUOTED_DEF = (
     "credential assignment",
-    r"(?im)^[ \t]*(?:export[ \t]+)?" + _KEY + r"[ \t]*[:=][ \t]*"
+    r"(?im)^[ \t]*(?:export[ \t]+)?[A-Za-z0-9_.-]{0,64}?" + _KEY + r"[ \t]*[:=][ \t]*"
     r"(?P<value>(?![\$%{<'\"\[]|null\b|none\b|true\b|false\b)[^\s#;,'\"]{4,})",
 )
 
